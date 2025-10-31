@@ -1,15 +1,20 @@
-# Functional ultrasound imaging sims
+# Functional ultrasound from scratch
 
-Simulates different phantoms in functional ultrasound to demonstrate the basic physical principles underlying functional ultrasound imaging (fUSI) and focused ultrasound (fUS).
+A collection of notebooks demonstrating how functional ultrasound imaging (fUSI) works from scratch. Planned are these four notebooks:
 
-## TODO
+1. Ultrasound propagation in homogeneous media: the wave equation, plane waves, focusing, apodization, steering
+2. Structural ultrasound reconstruction: how scatterers create an image, the delay-and-sum algorithm
+3. Functional ultrasound: measuring the movement of scatterers. Power Doppler, correlation functions, global motion and clutter removal with the SVD.
+4. Analyzing real fUS data. Movement artifacts, hemodynamic response functions, General Linear Models
 
-We'd like this to be a one-stop shop demonstrating signal processing from end-to-end. Currently, we demonstrate a toy structural and functional reconstruction in fUSI in a library-less way (i.e. Numpy and Scipy only). This is to facilitate understanding principles as opposed to practical implementations which may require specialized libraries and GPUs. 
+Currently, only the 3rd is fully implemented.
 
-Some of our plans include:
+## Why this series of notebooks?
 
-* Demonstrating IQ demodulation with a single scatterer
-* Expanding on the delay-and-sum algorithm, demonstrating the sensitivity function of a single element at a single time delay
-* Demonstrating acoustic field propagation for a homogeneous medium under dissipative conditions (i.e. replicating S4 here: https://www.medrxiv.org/content/10.1101/2025.08.19.25332261v1.full.pdf)
-* Demonstrating simple propagation in focused ultrasound from scratch (i.e. Scenario 0 in NTK) starting from the (dissipative) wave equation
+There are many comprehensive references on ultrasound, e.g. Szabo et al. (2012). Meanwhile, functional ultrasound of the brain is mostly documented in papers, with information scattered in methods sections that can lack context. Much of the best simulation software is in Matlab, which makes functional ultrasound quite difficult to understand to the Python native (e.g. machine learning researchers). 
 
+I wanted to create Python notebooks where you could transparently see how what the functional ultrasound signal is, from the oscillation of the transducers all the way to activation maps of the brain. I wanted to simulate ultrasound signals from scratch, with legible numpy and scipy code (as few frameworks as possible). That means the code takes some shortcuts, but it makes up for it in legibility and in allowing one to have a full view of the field in one snapshot.
+
+## Related work/inspiration
+
+* [NDK](https://github.com/agencyenterprise/neurotechdevkit): Focused ultrasound toolkit
