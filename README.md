@@ -7,7 +7,7 @@ A collection of notebooks demonstrating how functional ultrasound imaging (fUSI)
 3. Functional ultrasound: measuring the movement of scatterers. Power Doppler, correlation functions, global motion and clutter removal with the SVD.
 4. Analyzing real fUS data. Movement artifacts, hemodynamic response functions, General Linear Models
 
-Currently, only the 3rd is fully implemented.
+Currently, the first 3 are partially implemented.
 
 ## Why this series of notebooks?
 
