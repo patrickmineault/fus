@@ -22,6 +22,7 @@ def beamform_das(
     z,  # image grids: x (nx,), z (nz,)
     c,  # speed of sound [m/s]
     betas,  # (M,) steering angles [rad], order must match Y's first dim
+    omega,  # angular frequency [rad/s]
     alpha_np_per_m=None,  # float or None. If set, apply exp(+alpha * path) TGC (two-way)
 ):
     """
@@ -85,6 +86,10 @@ def beamform_das(
                 path_len = tau_tot * c  # (nx, Ne)
                 tgc = np.exp(alpha_np_per_m * path_len)
                 samples = samples * tgc
+
+            # Apply phase shift to baseband
+            phase_ang = omega * tau_tot  # (nx, Ne)
+            samples = samples * np.exp(1j * phase_ang)
 
             row_sum = samples.mean(axis=1)
             img[iz, :] += row_sum
@@ -245,7 +250,7 @@ def simulate_forward_channels(P: SimParams, scat_pos: np.ndarray, scat_amp: np.n
 
             # Convolve with envelope and crop
             y = fftconvolve(g, s_env, mode="full")[:K]
-            signals[i, n, :] = y * np.exp(1j * 2 * np.pi * P.f_carrier * times)
+            signals[i, n, :] = y
 
     return signals, times, elem_pos, betas, scat_pos, s_env
 
@@ -266,6 +271,7 @@ def _beamform_das_numba_kernel(
     cos_betas,  # (M,) - precomputed
     alpha_np_per_m,
     use_tgc,
+    omega,
 ):
     """
     Numba-compiled kernel for beamforming.
@@ -336,8 +342,12 @@ def _beamform_das_numba_kernel(
                         sample_real *= tgc
                         sample_imag *= tgc
 
-                    elem_sum_real += sample_real
-                    elem_sum_imag += sample_imag
+                    phase_ang = omega * tau_tot
+                    phase_r = np.cos(phase_ang)
+                    phase_i = np.sin(phase_ang)
+
+                    elem_sum_real += sample_real * phase_r - sample_imag * phase_i
+                    elem_sum_imag += sample_real * phase_i + sample_imag * phase_r
 
                 # Average over elements
                 elem_sum_real /= Ne
@@ -350,7 +360,9 @@ def _beamform_das_numba_kernel(
     return img_real, img_imag
 
 
-def beamform_das_vectorized(Y, times, elem_pos, x, z, c, betas, alpha_np_per_m=None):
+def beamform_das_vectorized(
+    Y, times, elem_pos, x, z, c, betas, omega, alpha_np_per_m=None
+):
     """
     Numba-optimized version of beamform_das.
     Much faster than reference implementation with minimal memory overhead.
@@ -389,6 +401,7 @@ def beamform_das_vectorized(Y, times, elem_pos, x, z, c, betas, alpha_np_per_m=N
         cos_betas,
         alpha_np_per_m_val,
         use_tgc,
+        omega,
     )
 
     # Combine back to complex
@@ -584,9 +597,7 @@ def simulate_forward_channels_vectorized(
         Y = G * S_env_fft[None, :]  # (Ne, conv_len)
         y = sp_fft.ifft(Y, axis=-1)[..., :K]  # (Ne, K)
 
-        # Multiply by carrier
-        carrier = np.exp(1j * 2 * np.pi * P.f_carrier * times)
-        signals[i, :, :] = y * carrier[None, :]
+        signals[i, :, :] = y
 
     return signals, times, elem_pos, betas, scat_pos, s_env
 

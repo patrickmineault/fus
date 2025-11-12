@@ -4,13 +4,14 @@ Unit tests to verify equivalence of vectorized implementations.
 
 import numpy as np
 import pytest
+
 from ultrasound_processing import (
+    SimParams,
     beamform_das,
     beamform_das_vectorized,
+    make_array_positions,
     simulate_forward_channels,
     simulate_forward_channels_vectorized,
-    SimParams,
-    make_array_positions,
 )
 
 
@@ -42,58 +43,63 @@ class TestBeamformDAS:
             Ne=32,  # Fewer elements
             angles_deg=(-4, 0, 4),  # Fewer angles
             x_span=(-5e-3, 5e-3),  # Smaller FOV
-            z_span=( 15e-3, 25e-3),
+            z_span=(15e-3, 25e-3),
         )
 
         # Generate test scatterers
         scat_pos, scat_amp = sample_scatterers(P, n_scatterers=50)
 
         # Simulate forward channels
-        signals, times, elem_pos, betas, _, _ = simulate_forward_channels(P, scat_pos, scat_amp)
+        signals, times, elem_pos, betas, _, _ = simulate_forward_channels(
+            P, scat_pos, scat_amp
+        )
 
         # Create image grid
         x, z = make_image_grid(P.x_span, P.z_span, 0.2e-3, 0.2e-3)
 
         # Compute attenuation coefficient
         if P.use_attenuation:
-            alpha = (P.alpha_db_cm_mhz * (P.f_carrier/1e6) * 100.0) / 8.686
+            alpha = (P.alpha_db_cm_mhz * (P.f_carrier / 1e6) * 100.0) / 8.686
         else:
             alpha = None
 
         return {
-            'signals': signals,
-            'times': times,
-            'elem_pos': elem_pos,
-            'x': x,
-            'z': z,
-            'c': P.c,
-            'betas': betas,
-            'alpha': alpha,
+            "signals": signals,
+            "times": times,
+            "elem_pos": elem_pos,
+            "x": x,
+            "z": z,
+            "c": P.c,
+            "betas": betas,
+            "omega": 2 * np.pi * P.f_carrier,
+            "alpha": alpha,
         }
 
     def test_beamform_equivalence_no_tgc(self, test_data):
         """Test that vectorized beamforming matches reference implementation without TGC."""
         # Run reference implementation
         img_ref = beamform_das(
-            test_data['signals'],
-            test_data['times'],
-            test_data['elem_pos'],
-            test_data['x'],
-            test_data['z'],
-            test_data['c'],
-            test_data['betas'],
+            test_data["signals"],
+            test_data["times"],
+            test_data["elem_pos"],
+            test_data["x"],
+            test_data["z"],
+            test_data["c"],
+            test_data["betas"],
+            test_data["omega"],
             alpha_np_per_m=None,
         )
 
         # Run vectorized implementation
         img_vec = beamform_das_vectorized(
-            test_data['signals'],
-            test_data['times'],
-            test_data['elem_pos'],
-            test_data['x'],
-            test_data['z'],
-            test_data['c'],
-            test_data['betas'],
+            test_data["signals"],
+            test_data["times"],
+            test_data["elem_pos"],
+            test_data["x"],
+            test_data["z"],
+            test_data["c"],
+            test_data["betas"],
+            test_data["omega"],
             alpha_np_per_m=None,
         )
 
@@ -104,26 +110,28 @@ class TestBeamformDAS:
         """Test that vectorized beamforming matches reference implementation with TGC."""
         # Run reference implementation
         img_ref = beamform_das(
-            test_data['signals'],
-            test_data['times'],
-            test_data['elem_pos'],
-            test_data['x'],
-            test_data['z'],
-            test_data['c'],
-            test_data['betas'],
-            alpha_np_per_m=test_data['alpha'],
+            test_data["signals"],
+            test_data["times"],
+            test_data["elem_pos"],
+            test_data["x"],
+            test_data["z"],
+            test_data["c"],
+            test_data["betas"],
+            test_data["omega"],
+            alpha_np_per_m=test_data["alpha"],
         )
 
         # Run vectorized implementation
         img_vec = beamform_das_vectorized(
-            test_data['signals'],
-            test_data['times'],
-            test_data['elem_pos'],
-            test_data['x'],
-            test_data['z'],
-            test_data['c'],
-            test_data['betas'],
-            alpha_np_per_m=test_data['alpha'],
+            test_data["signals"],
+            test_data["times"],
+            test_data["elem_pos"],
+            test_data["x"],
+            test_data["z"],
+            test_data["c"],
+            test_data["betas"],
+            test_data["omega"],
+            alpha_np_per_m=test_data["alpha"],
         )
 
         # Compare
@@ -132,16 +140,17 @@ class TestBeamformDAS:
     def test_beamform_output_shape(self, test_data):
         """Test that output shape is correct."""
         img = beamform_das_vectorized(
-            test_data['signals'],
-            test_data['times'],
-            test_data['elem_pos'],
-            test_data['x'],
-            test_data['z'],
-            test_data['c'],
-            test_data['betas'],
+            test_data["signals"],
+            test_data["times"],
+            test_data["elem_pos"],
+            test_data["x"],
+            test_data["z"],
+            test_data["c"],
+            test_data["betas"],
+            test_data["omega"],
         )
 
-        expected_shape = (len(test_data['z']), len(test_data['x']))
+        expected_shape = (len(test_data["z"]), len(test_data["x"]))
         assert img.shape == expected_shape
         assert img.dtype == np.complex128
 
@@ -168,12 +177,14 @@ class TestSimulateForwardChannels:
         P, scat_pos, scat_amp = test_params
 
         # Run reference implementation
-        signals_ref, times_ref, elem_pos_ref, betas_ref, _, s_env_ref = \
+        signals_ref, times_ref, elem_pos_ref, betas_ref, _, s_env_ref = (
             simulate_forward_channels(P, scat_pos, scat_amp)
+        )
 
         # Run vectorized implementation
-        signals_vec, times_vec, elem_pos_vec, betas_vec, _, s_env_vec = \
+        signals_vec, times_vec, elem_pos_vec, betas_vec, _, s_env_vec = (
             simulate_forward_channels_vectorized(P, scat_pos, scat_amp)
+        )
 
         # Compare signals (main output)
         np.testing.assert_allclose(signals_vec, signals_ref, rtol=1e-10, atol=1e-12)
@@ -188,8 +199,9 @@ class TestSimulateForwardChannels:
         """Test that output shapes are correct."""
         P, scat_pos, scat_amp = test_params
 
-        signals, times, elem_pos, betas, _, s_env = \
+        signals, times, elem_pos, betas, _, s_env = (
             simulate_forward_channels_vectorized(P, scat_pos, scat_amp)
+        )
 
         M = len(P.angles_deg)
         Ne = P.Ne
@@ -215,7 +227,9 @@ class TestSimulateForwardChannels:
 
         # Run both implementations
         signals_ref, _, _, _, _, _ = simulate_forward_channels(P, scat_pos, scat_amp)
-        signals_vec, _, _, _, _, _ = simulate_forward_channels_vectorized(P, scat_pos, scat_amp)
+        signals_vec, _, _, _, _, _ = simulate_forward_channels_vectorized(
+            P, scat_pos, scat_amp
+        )
 
         # Compare
         np.testing.assert_allclose(signals_vec, signals_ref, rtol=1e-10, atol=1e-12)
@@ -237,15 +251,21 @@ class TestEndToEnd:
         scat_pos, scat_amp = sample_scatterers(P, n_scatterers=30)
 
         # Reference pipeline
-        signals_ref, times, elem_pos, betas, _, _ = \
-            simulate_forward_channels(P, scat_pos, scat_amp)
+        signals_ref, times, elem_pos, betas, _, _ = simulate_forward_channels(
+            P, scat_pos, scat_amp
+        )
         x, z = make_image_grid(P.x_span, P.z_span, 0.2e-3, 0.2e-3)
-        img_ref = beamform_das(signals_ref, times, elem_pos, x, z, P.c, betas)
+        img_ref = beamform_das(
+            signals_ref, times, elem_pos, x, z, P.c, betas, 2 * np.pi * P.f_carrier
+        )
 
         # Vectorized pipeline
-        signals_vec, _, _, _, _, _ = \
-            simulate_forward_channels_vectorized(P, scat_pos, scat_amp)
-        img_vec = beamform_das_vectorized(signals_vec, times, elem_pos, x, z, P.c, betas)
+        signals_vec, _, _, _, _, _ = simulate_forward_channels_vectorized(
+            P, scat_pos, scat_amp
+        )
+        img_vec = beamform_das_vectorized(
+            signals_vec, times, elem_pos, x, z, P.c, betas, 2 * np.pi * P.f_carrier
+        )
 
         # Compare final images
         np.testing.assert_allclose(img_vec, img_ref, rtol=1e-10, atol=1e-12)
@@ -256,5 +276,5 @@ class TestEndToEnd:
         assert np.max(np.abs(img_ref)) > 0  # Not all zeros
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
