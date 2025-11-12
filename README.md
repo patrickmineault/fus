@@ -22,6 +22,9 @@ To maximize legibility, we do as much as possible in base Python, numpy, scipy a
 - Add another tutorial on how you would do this in the "real world", covering GPU-accelerated frameworks at a more "industrial" scale. Potential frameworks include  NDK, k-wave in python, vbeam, FAST and pyfus.
 - Do a re-analysis of Functional ultrasound neuroimaging reveals mesoscopic organization of saccades in the lateral intraparietal area
 https://data.caltech.edu/records/p5jan-02r60. Should cover questions like how decoding varies as resolution decreases, telegraphing the relationship between fUS and fMRI.
+- Refactor the discussion of PD signals vs. autocorrelation by moving autocorrelation discussion to the end of the tutorial in an optional section
+- Crop the simulations in tutorial 3 to make them faster
+- Add F number/subset selection discussion in DAS discussion in tutorial 2
 
 ## Related work/inspiration
 
