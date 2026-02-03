@@ -1,0 +1,11 @@
+# Jupytext configuration
+# Pairs .ipynb files with .py files using percent format (# %% cell markers)
+
+# Format pairing: keep .ipynb and .py:percent in sync
+formats = "ipynb,py:percent"
+
+# Keep minimal metadata to reduce merge conflicts
+notebook_metadata_filter = "jupytext,-kernelspec,-widgets"
+
+# Strip cell metadata for cleaner diffs
+cell_metadata_filter = "-all"

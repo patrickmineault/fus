@@ -1,5 +1,21 @@
-/simulate_dynamical_independence.ipynb
+# Source notebooks in src/ (generated locally via jupytext, not tracked)
+src/*.ipynb
+
+# Root .ipynb files ARE tracked - they're the compiled/published versions
+
+# Python cache
 __pycache__
+
+# Generated outputs
 figs
+executed/
+html/
+
+# Data files
 data/
+*.h5
+*.zip
+
+# Build artifacts
 build
+.DS_Store

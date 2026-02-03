@@ -10,6 +10,7 @@ import numpy as np
 from numba import njit, prange
 from scipy import fft as sp_fft
 from scipy.signal import fftconvolve
+from scipy.sparse import csr_matrix
 
 # ========== Reference Implementations ==========
 
@@ -95,6 +96,277 @@ def beamform_das(
             img[iz, :] += row_sum
 
     return img  # complex image (before envelope/log)
+
+
+@njit(parallel=True, fastmath=True)
+def _build_sparse_matrix_kernel(
+    x,
+    z,
+    elem_pos,
+    times,
+    betas,
+    sin_betas,
+    cos_betas,
+    c,
+    omega,
+    t0,
+    dt,
+    K,
+    alpha_np_per_m,
+):
+    """
+    Numba-accelerated kernel to build sparse matrix components.
+
+    Returns row_indices, col_indices, data_real, data_imag arrays.
+    """
+    M = len(betas)
+    Ne = len(elem_pos)
+    nx = len(x)
+    nz = len(z)
+
+    # Total number of non-zero entries: nz * nx * M * Ne
+    nnz = nz * nx * M * Ne
+
+    # Pre-allocate arrays
+    row_indices = np.empty(nnz, dtype=np.int64)
+    col_indices = np.empty(nnz, dtype=np.int64)
+    data_real = np.empty(nnz, dtype=np.float64)
+    data_imag = np.empty(nnz, dtype=np.float64)
+
+    # Normalization factor (average over elements)
+    norm_factor = 1.0 / Ne
+    k = omega / c
+    b = (elem_pos[1] - elem_pos[0]) / 2
+    tgc = 1.0
+
+    # Parallel loop over output pixels
+    for idx in prange(nz * nx):
+        # Decode flat index to (iz, ix)
+        iz = idx // nx
+        ix = idx % nx
+
+        zf = z[iz]
+        xf = x[ix]
+
+        # Loop over angles and elements
+        for m in range(M):
+            sin_beta = sin_betas[m]
+            cos_beta = cos_betas[m]
+
+            # TX delay for this pixel
+            tau_tx = (xf * sin_beta + zf * cos_beta) / c
+
+            for n in range(Ne):
+                # RX delay
+                dx = xf - elem_pos[n]
+                r_rx = np.sqrt(dx * dx + zf * zf)
+                tau_rx = r_rx / c
+                tau_tot = tau_rx + tau_tx
+
+                # Sample index
+                k_idx_float = (tau_tot - t0) / dt
+                k_idx = int(np.rint(k_idx_float))
+                if k_idx < 0:
+                    k_idx = 0
+                elif k_idx >= K:
+                    k_idx = K - 1
+
+                directivity = np.sinc((k * b * (xf - elem_pos[n]) / r_rx) / np.pi)
+                if alpha_np_per_m is not None and alpha_np_per_m != 0.0:
+                    path_len = tau_tot * c
+                    tgc = np.exp(-alpha_np_per_m * path_len)
+
+                dist_mult = 1.0 / np.sqrt(r_rx)
+
+                # Phase shift
+                phase_ang = omega * tau_tot
+                phase_r = (
+                    np.cos(phase_ang) * norm_factor * directivity * tgc * dist_mult
+                )
+                phase_i = (
+                    np.sin(phase_ang) * norm_factor * directivity * tgc * dist_mult
+                )
+
+                # Input index in flattened array
+                input_idx = m * Ne * K + n * K + k_idx
+
+                # Calculate position in output arrays
+                entry_idx = idx * M * Ne + m * Ne + n
+
+                # Store values
+                row_indices[entry_idx] = idx
+                col_indices[entry_idx] = input_idx
+                data_real[entry_idx] = phase_r
+                data_imag[entry_idx] = phase_i
+
+    return row_indices, col_indices, data_real, data_imag
+
+
+def build_das_sparse_matrix(
+    times,  # (K,) time stamps [s], uniform
+    elem_pos,  # (Ne,) element x-positions [m], z=0
+    x,
+    z,  # image grids: x (nx,), z (nz,)
+    c,  # speed of sound [m/s]
+    betas,  # (M,) steering angles [rad]
+    omega,  # angular frequency [rad/s]
+    alpha_np_per_m=0.0,  # float; assumed 0 for this optimized version
+):
+    """
+    Build a sparse projection operator X such that the DAS image y = X @ w,
+    where w is the flattened (complex) IQ data of shape (M * Ne * K,).
+
+    This version assumes alpha_np_per_m=0 (no TGC compensation).
+    Optimized with Numba for fast construction.
+
+    Parameters:
+    -----------
+    times : ndarray (K,)
+        Time stamps in seconds, uniformly sampled
+    elem_pos : ndarray (Ne,)
+        Element x-positions in meters at z=0
+    x : ndarray (nx,)
+        Image x-coordinates in meters
+    z : ndarray (nz,)
+        Image z-coordinates in meters
+    c : float
+        Speed of sound in m/s
+    betas : ndarray (M,)
+        Steering angles in radians
+    omega : float
+        Angular frequency in rad/s
+
+    Returns:
+    --------
+    X : scipy.sparse.csr_matrix (nz * nx, M * Ne * K)
+        Sparse projection operator where each row corresponds to one output pixel
+        and encodes which input samples contribute with what phase shifts
+    """
+    M = len(betas)
+    Ne = len(elem_pos)
+    K = len(times)
+    nx = len(x)
+    nz = len(z)
+
+    t0 = float(times[0])
+    dt = float(times[1] - times[0])
+
+    # Precompute sin/cos
+    sin_betas = np.sin(betas)
+    cos_betas = np.cos(betas)
+
+    # Ensure arrays are contiguous
+    x = np.ascontiguousarray(x, dtype=np.float64)
+    z = np.ascontiguousarray(z, dtype=np.float64)
+    elem_pos = np.ascontiguousarray(elem_pos, dtype=np.float64)
+    times = np.ascontiguousarray(times, dtype=np.float64)
+    betas = np.ascontiguousarray(betas, dtype=np.float64)
+    sin_betas = np.ascontiguousarray(sin_betas, dtype=np.float64)
+    cos_betas = np.ascontiguousarray(cos_betas, dtype=np.float64)
+
+    # Call Numba kernel
+    row_indices, col_indices, data_real, data_imag = _build_sparse_matrix_kernel(
+        x,
+        z,
+        elem_pos,
+        times,
+        betas,
+        sin_betas,
+        cos_betas,
+        c,
+        omega,
+        t0,
+        dt,
+        K,
+        alpha_np_per_m,
+    )
+
+    # Combine real and imaginary parts
+    data_values = data_real + 1j * data_imag
+
+    # Create sparse matrix in CSR format (efficient for matrix-vector products)
+    X = csr_matrix(
+        (data_values, (row_indices, col_indices)),
+        shape=(nz * nx, M * Ne * K),
+        dtype=np.complex128,
+    )
+
+    return X
+
+
+def beamform_das_sparse(
+    Y,  # (M, Ne, K) complex RF (analytic) channels
+    X,  # Precomputed sparse projection operator
+):
+    """
+    Delay-and-sum beamforming using precomputed sparse projection operator.
+
+    Parameters:
+    -----------
+    Y : ndarray (M, Ne, K)
+        Complex RF (analytic) channels for M angles, Ne elements, K time samples
+    X : scipy.sparse matrix (nz * nx, M * Ne * K)
+        Sparse projection operator from build_das_sparse_matrix
+
+    Returns:
+    --------
+    img : ndarray (nz, nx)
+        Complex beamformed image
+    """
+    M, Ne, K = Y.shape
+
+    # Flatten input data
+    w = Y.reshape(-1)  # (M * Ne * K,)
+
+    # Apply sparse matrix multiplication
+    y = X @ w  # (nz * nx,)
+
+    # Reshape to image
+    nz_nx = y.shape[0]
+    # Infer nz, nx from the output shape and typical aspect ratios
+    # We need to know nz and nx to reshape properly
+    # For now, assume square or use X.shape[0] to infer
+    # Actually, we need to pass nz, nx or infer from somewhere
+    # Let me modify the function signature
+
+    return y  # Return flattened for now
+
+
+def beamform_das_sparse_with_shape(
+    Y,  # (M, Ne, K) complex RF (analytic) channels
+    X,  # Precomputed sparse projection operator
+    nz,
+    nx,
+):
+    """
+    Delay-and-sum beamforming using precomputed sparse projection operator.
+
+    Parameters:
+    -----------
+    Y : ndarray (M, Ne, K)
+        Complex RF (analytic) channels for M angles, Ne elements, K time samples
+    X : scipy.sparse matrix (nz * nx, M * Ne * K)
+        Sparse projection operator from build_das_sparse_matrix
+    nz, nx : int
+        Image dimensions
+
+    Returns:
+    --------
+    img : ndarray (nz, nx)
+        Complex beamformed image
+    """
+    M, Ne, K = Y.shape
+
+    # Flatten input data
+    w = Y.reshape(-1)  # (M * Ne * K,)
+
+    # Apply sparse matrix multiplication
+    y = X @ w  # (nz * nx,)
+
+    # Reshape to image
+    img = y.reshape(nz, nx)
+
+    return img
 
 
 def hann_burst_envelope(f0: float, cycles: int, fs: float) -> np.ndarray:

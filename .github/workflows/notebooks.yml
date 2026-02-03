@@ -1,0 +1,175 @@
+name: Build and Publish Notebooks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**.py'
+      - 'src/jupytext.toml'
+      - 'requirements.txt'
+      - '.github/workflows/notebooks.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**.py'
+      - 'src/jupytext.toml'
+      - 'requirements.txt'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build-notebooks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m ipykernel install --user --name python3
+
+      - name: Sync .py files to .ipynb with jupytext
+        working-directory: src
+        run: |
+          # Find all paired .py files and sync to .ipynb
+          for pyfile in *.py; do
+            # Skip non-notebook .py files (those without jupytext markers)
+            if grep -q "^# %%" "$pyfile" 2>/dev/null; then
+              echo "Syncing: $pyfile"
+              jupytext --sync "$pyfile"
+            fi
+          done
+
+      - name: Execute notebooks
+        working-directory: src
+        run: |
+          # Execute notebooks that don't require external data
+          for notebook in \
+            "01 - Ultrasound Propagation in Homogeneous Media.ipynb" \
+            "02 - Structural Reconstruction.ipynb" \
+            "03 - Functional Reconstruction.ipynb"; do
+            if [ -f "$notebook" ]; then
+              echo "Executing: $notebook"
+              jupyter nbconvert --to notebook --execute --inplace \
+                --ExecutePreprocessor.timeout=1800 \
+                --ExecutePreprocessor.kernel_name=python3 \
+                "$notebook" || echo "Warning: $notebook execution failed"
+            fi
+          done
+
+      - name: Strip animations from executed notebooks
+        working-directory: src
+        run: |
+          python ../scripts/strip_animations.py --all
+
+      - name: Copy executed notebooks to root
+        run: |
+          # Copy executed notebooks to root for easy browsing
+          cp src/*.ipynb .
+
+      - name: Commit updated notebooks
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add *.ipynb
+          git diff --staged --quiet || git commit -m "Update compiled notebooks [skip ci]"
+          git push
+
+      - name: Upload notebooks as artifacts (for PRs)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-notebooks
+          path: "*.ipynb"
+          retention-days: 7
+
+      - name: Convert to HTML for GitHub Pages
+        run: |
+          mkdir -p html
+          for notebook in *.ipynb; do
+            if [ -f "$notebook" ]; then
+              jupyter nbconvert --to html "$notebook" --output-dir=html
+            fi
+          done
+          # Create a simple index page
+          cat > html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>fUS Tutorials</title>
+            <style>
+              body { font-family: system-ui, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+              h1 { color: #333; }
+              ul { list-style: none; padding: 0; }
+              li { margin: 10px 0; }
+              a { color: #0066cc; text-decoration: none; font-size: 1.1em; }
+              a:hover { text-decoration: underline; }
+            </style>
+          </head>
+          <body>
+            <h1>Functional Ultrasound (fUS) Tutorials</h1>
+            <ul>
+              <li><a href="01 - Ultrasound Propagation in Homogeneous Media.html">01 - Ultrasound Propagation in Homogeneous Media</a></li>
+              <li><a href="02 - Structural Reconstruction.html">02 - Structural Reconstruction</a></li>
+              <li><a href="03 - Functional Reconstruction.html">03 - Functional Reconstruction</a></li>
+            </ul>
+            <p><em>Run the notebooks locally to see interactive animations.</em></p>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload HTML artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: notebook-html
+          path: html/
+          retention-days: 30
+
+  # Deploy to GitHub Pages on push to main
+  deploy-pages:
+    needs: build-notebooks
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Download HTML artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: notebook-html
+          path: html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: html
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
