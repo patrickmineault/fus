@@ -7,8 +7,11 @@
 #   ./scripts/sync.sh --force      # Sync and execute ALL notebooks
 
 set -e
-SCRIPT_DIR="$(dirname "$0")"
+SCRIPT_DIR="$(dirname "$0")/../"
 cd "$SCRIPT_DIR/../src" || exit 1
+
+# Kill all child processes on Ctrl+C
+trap 'echo " Interrupted, killing background jobs..."; kill $(jobs -p) 2>/dev/null; exit 1' INT
 
 MODE="auto"
 if [[ "$1" == "--no-execute" ]]; then
@@ -46,7 +49,7 @@ if [[ ${#TO_EXECUTE[@]} -gt 0 ]]; then
     for notebook in "${TO_EXECUTE[@]}"; do
         (
             echo "  Starting: $notebook"
-            jupyter nbconvert --to notebook --execute --inplace \
+            TQDM_DISABLE=1 jupyter nbconvert --to notebook --execute --inplace \
                 --ExecutePreprocessor.timeout=1800 \
                 --ExecutePreprocessor.kernel_name=python3 \
                 "$notebook" && echo "  Done: $notebook" || echo "  Failed: $notebook"
@@ -66,4 +69,5 @@ python "$SCRIPT_DIR/strip_animations.py" --all
 echo ""
 echo "Copying notebooks to root..."
 cp *.ipynb "$SCRIPT_DIR/.."
+
 echo "Done."

@@ -135,8 +135,6 @@ def _build_sparse_matrix_kernel(
 
     # Normalization factor (average over elements)
     norm_factor = 1.0 / Ne
-    k = omega / c
-    b = (elem_pos[1] - elem_pos[0]) / 2
     tgc = 1.0
 
     # Parallel loop over output pixels
@@ -171,21 +169,14 @@ def _build_sparse_matrix_kernel(
                 elif k_idx >= K:
                     k_idx = K - 1
 
-                directivity = np.sinc((k * b * (xf - elem_pos[n]) / r_rx) / np.pi)
                 if alpha_np_per_m is not None and alpha_np_per_m != 0.0:
                     path_len = tau_tot * c
-                    tgc = np.exp(-alpha_np_per_m * path_len)
-
-                dist_mult = 1.0 / np.sqrt(r_rx)
+                    tgc = np.exp(alpha_np_per_m * path_len)
 
                 # Phase shift
                 phase_ang = omega * tau_tot
-                phase_r = (
-                    np.cos(phase_ang) * norm_factor * directivity * tgc * dist_mult
-                )
-                phase_i = (
-                    np.sin(phase_ang) * norm_factor * directivity * tgc * dist_mult
-                )
+                phase_r = np.cos(phase_ang) * norm_factor * tgc
+                phase_i = np.sin(phase_ang) * norm_factor * tgc
 
                 # Input index in flattened array
                 input_idx = m * Ne * K + n * K + k_idx
@@ -294,44 +285,6 @@ def build_das_sparse_matrix(
     return X
 
 
-def beamform_das_sparse(
-    Y,  # (M, Ne, K) complex RF (analytic) channels
-    X,  # Precomputed sparse projection operator
-):
-    """
-    Delay-and-sum beamforming using precomputed sparse projection operator.
-
-    Parameters:
-    -----------
-    Y : ndarray (M, Ne, K)
-        Complex RF (analytic) channels for M angles, Ne elements, K time samples
-    X : scipy.sparse matrix (nz * nx, M * Ne * K)
-        Sparse projection operator from build_das_sparse_matrix
-
-    Returns:
-    --------
-    img : ndarray (nz, nx)
-        Complex beamformed image
-    """
-    M, Ne, K = Y.shape
-
-    # Flatten input data
-    w = Y.reshape(-1)  # (M * Ne * K,)
-
-    # Apply sparse matrix multiplication
-    y = X @ w  # (nz * nx,)
-
-    # Reshape to image
-    nz_nx = y.shape[0]
-    # Infer nz, nx from the output shape and typical aspect ratios
-    # We need to know nz and nx to reshape properly
-    # For now, assume square or use X.shape[0] to infer
-    # Actually, we need to pass nz, nx or infer from somewhere
-    # Let me modify the function signature
-
-    return y  # Return flattened for now
-
-
 def beamform_das_sparse_with_shape(
     Y,  # (M, Ne, K) complex RF (analytic) channels
     X,  # Precomputed sparse projection operator
@@ -378,12 +331,6 @@ def hann_burst_envelope(f0: float, cycles: int, fs: float) -> np.ndarray:
     s = np.hanning(Nt).astype(np.float64)
     e = np.sqrt(np.sum(s**2))
     return s / e if e > 0 else s
-
-
-def make_array_positions(Ne: int, pitch: float, center_x: float) -> np.ndarray:
-    """Generate array element positions."""
-    idx = np.arange(Ne) - (Ne - 1) / 2
-    return center_x + idx * pitch  # (Ne,) x-positions at z=0
 
 
 @dataclass

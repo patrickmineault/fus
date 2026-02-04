@@ -8,15 +8,17 @@ This script:
 """
 
 import time
+
 import numpy as np
+
 from ultrasound_processing import (
     SimParams,
-    simulate_forward_channels,
     beamform_das,
+    beamform_das_sparse_with_shape,
     beamform_das_vectorized,
     build_das_sparse_matrix,
-    beamform_das_sparse_with_shape,
     make_image_grid,
+    simulate_forward_channels,
 )
 
 
@@ -57,7 +59,9 @@ def verify_equivalence():
     # 1. Reference implementation (alpha=0)
     print("\nRunning reference implementation...")
     t0 = time.time()
-    img_ref = beamform_das(Y, times, elem_pos, x, z, P.c, betas, omega, alpha_np_per_m=0.0)
+    img_ref = beamform_das(
+        Y, times, elem_pos, x, z, P.c, betas, omega, alpha_np_per_m=0.0
+    )
     t_ref = time.time() - t0
     print(f"  Time: {t_ref:.3f}s")
     print(f"  Image shape: {img_ref.shape}")
@@ -70,7 +74,9 @@ def verify_equivalence():
     print(f"  Time to build: {t_build:.3f}s")
     print(f"  Matrix shape: {X_sparse.shape}")
     print(f"  Non-zero elements: {X_sparse.nnz:,}")
-    print(f"  Sparsity: {X_sparse.nnz / (X_sparse.shape[0] * X_sparse.shape[1]) * 100:.2f}%")
+    print(
+        f"  Sparsity: {X_sparse.nnz / (X_sparse.shape[0] * X_sparse.shape[1]) * 100:.2f}%"
+    )
     print(f"  Memory (approx): {X_sparse.data.nbytes / 1e6:.1f} MB")
 
     # 3. Sparse matrix implementation
@@ -171,7 +177,9 @@ def benchmark_implementations(n_images_list=[1, 2, 4, 8]):
         # 2. Optimized implementation (Numba)
         print(f"  Running optimized (Numba) implementation...")
         # Warm up
-        _ = beamform_das_vectorized(Y, times, elem_pos, x, z, P.c, betas, omega, alpha_np_per_m=0.0)
+        _ = beamform_das_vectorized(
+            Y, times, elem_pos, x, z, P.c, betas, omega, alpha_np_per_m=0.0
+        )
         t0 = time.time()
         for i in range(n_images):
             img_opt = beamform_das_vectorized(
@@ -184,13 +192,17 @@ def benchmark_implementations(n_images_list=[1, 2, 4, 8]):
         print(f"  Running sparse matrix implementation...")
         t0 = time.time()
         for i in range(n_images):
-            img_sparse = beamform_das_sparse_with_shape(Y_batch[i], X_sparse, len(z), len(x))
+            img_sparse = beamform_das_sparse_with_shape(
+                Y_batch[i], X_sparse, len(z), len(x)
+            )
         t_sparse = time.time() - t0
         print(f"    Time: {t_sparse:.3f}s ({t_sparse/n_images:.3f}s per image)")
 
         # 4. Sparse matrix with build time amortized
         t_sparse_with_build = t_build + t_sparse
-        print(f"    Time (with build): {t_sparse_with_build:.3f}s ({t_sparse_with_build/n_images:.3f}s per image)")
+        print(
+            f"    Time (with build): {t_sparse_with_build:.3f}s ({t_sparse_with_build/n_images:.3f}s per image)"
+        )
 
         # Store results
         results["n_images"].append(n_images)
@@ -207,7 +219,9 @@ def benchmark_implementations(n_images_list=[1, 2, 4, 8]):
     print("\n" + "=" * 70)
     print("SUMMARY TABLE")
     print("=" * 70)
-    print(f"{'N Images':<12} {'Naive (s)':<12} {'Optimized (s)':<15} {'Sparse (s)':<12} {'Sparse+Build (s)':<18}")
+    print(
+        f"{'N Images':<12} {'Naive (s)':<12} {'Optimized (s)':<15} {'Sparse (s)':<12} {'Sparse+Build (s)':<18}"
+    )
     print("-" * 70)
     for i in range(len(n_images_list)):
         print(
@@ -241,7 +255,7 @@ if __name__ == "__main__":
 
     if success:
         # Step 2: Benchmark
-        results = benchmark_implementations(n_images_list=[1, 2, 4, 8])
+        results = benchmark_implementations(n_images_list=[1, 2, 4, 8, 50])
 
         print("\n" + "=" * 70)
         print("BENCHMARK COMPLETE")
