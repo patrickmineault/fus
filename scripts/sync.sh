@@ -7,7 +7,7 @@
 #   ./scripts/sync.sh --force      # Sync and execute ALL notebooks
 
 set -e
-SCRIPT_DIR="$(dirname "$0")/../"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/../src" || exit 1
 
 # Kill all child processes on Ctrl+C

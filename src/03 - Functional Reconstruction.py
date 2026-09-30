@@ -8,7 +8,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.1
+#       jupytext_version: 1.17.2
 # ---
 
 # %%
@@ -183,6 +183,7 @@ for Y in tqdm(Ys):
         Y, times, elem_pos, x, z, P.c, betas, 2 * np.pi * P.f_carrier, alpha
     )
     imgs_complex.append(img_complex)
+imgs_complex = np.array(imgs_complex)
 
 print(f"✓ Collected {len(Ys)} frames")
 print(f"  Each frame shape: {Ys[0].shape}")
@@ -301,7 +302,7 @@ plt.show()
 
 # %%
 # Second-order: standard deviation
-img_std = imgs_env.std(axis=0)
+img_std = imgs_complex.std(axis=0)
 
 plt.figure(figsize=(8, 6))
 plt.imshow(
@@ -312,7 +313,7 @@ plt.imshow(
 )
 plt.xlabel("x (mm)")
 plt.ylabel("z (mm)")
-plt.title("Second-order image (std of real image) - Power Doppler")
+plt.title("Second-order image (std of complex images) - Power Doppler")
 plt.colorbar(label="Std Intensity")
 
 plt.tight_layout()
@@ -407,6 +408,7 @@ for Y in tqdm(Ys):
         Y, times, elem_pos, x, z, P.c, betas, 2 * np.pi * P.f_carrier, alpha
     )
     imgs_complex.append(img_complex)
+imgs_complex = np.array(imgs_complex)
 
 print(f"✓ Collected {len(Ys)} frames")
 print(f"  Each frame shape: {Ys[0].shape}")
@@ -484,8 +486,7 @@ HTML(anim.to_jshtml())
 
 # %%
 # Second-order: standard deviation
-imgs_env = np.array([np.abs(img) for img in imgs_complex])
-img_std = imgs_env.std(axis=0)
+img_std = imgs_complex.std(axis=0)
 
 plt.figure(figsize=(8, 6))
 plt.imshow(
@@ -496,7 +497,7 @@ plt.imshow(
 )
 plt.xlabel("x (mm)")
 plt.ylabel("z (mm)")
-plt.title("Second-order image (std of real image) - Power Doppler")
+plt.title("Second-order image (std of complex images) - Power Doppler")
 plt.colorbar(label="Std Intensity")
 
 plt.tight_layout()
@@ -589,9 +590,8 @@ for speed_idx, flow_speed in enumerate(flow_speeds):
         )
         imgs_complex_test.append(img_complex_test)
 
-    # Compute envelope and variance
-    imgs_env_test = np.array([np.abs(img) for img in imgs_complex_test])
-    img_std_test = imgs_env_test.std(axis=0)
+    imgs_complex_test = np.array(imgs_complex_test)
+    img_std_test = imgs_complex_test.std(axis=0)
 
     # Create mask for pixels in the vessel region
     X_grid, Z_grid = np.meshgrid(x, z)
@@ -616,7 +616,7 @@ ax1.plot(
     color="#e74c3c",
 )
 ax1.set_xlabel("Flow Speed (mm/s)", fontsize=12)
-ax1.set_ylabel("Power Doppler Signal (std of envelope)", fontsize=12)
+ax1.set_ylabel("Power Doppler Signal (std of complex images)", fontsize=12)
 ax1.set_title(
     "Power Doppler Signal vs. Flow Speed\n(Horizontal blood vessel, coherent flow)",
     fontsize=14,
@@ -711,25 +711,25 @@ for i in tqdm(range(n_frames_test)):
 # Beamform all frames
 imgs_complex_test = []
 for Y_test in tqdm(Ys_test, desc="Beamforming"):
-    img_complex_test = img_complex = beamform_das_vectorized(
+    img_complex_test = beamform_das_vectorized(
         Y_test, t_test, elem_pos_test, x, z, P.c, betas, 2 * np.pi * P.f_carrier, alpha
     )
     imgs_complex_test.append(img_complex_test)
 
 # Compute envelope and variance
-imgs_env_test = np.array([np.abs(img) for img in imgs_complex_test])
-img_std_test = imgs_env_test.std(axis=0)
+imgs_complex_test = np.array(imgs_complex_test)
+img_std_test = imgs_complex_test.std(axis=0)
 
 # Create mask for pixels in the vessel region
 X_grid, Z_grid = np.meshgrid(x, z)
 middle_line = int(np.where((z >= vessel_z_min) & (z <= vessel_z_max))[0].mean())
 
 # Pick the middle line in the vessel region
-center_pos = imgs_env_test[:, middle_line, :]
+center_pos = imgs_complex_test[:, middle_line, :]
 
 # %%
 plt.imshow(
-    center_pos.T,
+    abs(center_pos).T,
     aspect="auto",
     cmap="hot",
     extent=[0, n_frames_test / fps * 1000, x[0] * 1e3, x[-1] * 1e3],
@@ -782,7 +782,7 @@ plt.plot(
     color="#3498db",
 )
 plt.xlabel("Time (ms)")
-plt.ylabel("Average Power Doppler Signal (std of envelope)")
+plt.ylabel("Average Power Doppler Signal (std of complex images)")
 plt.title("Power Doppler Signal vs. Averaging Time")
 
 
@@ -880,9 +880,8 @@ for density in densities:
         )
         imgs_complex_test.append(img_complex_test)
 
-    # Compute envelope and variance
-    imgs_env_test = np.array([np.abs(img) for img in imgs_complex_test])
-    img_std_test = imgs_env_test.std(axis=0)
+    imgs_complex_test = np.array(imgs_complex_test)
+    img_std_test = imgs_complex_test.std(axis=0)
 
     # Create mask for pixels in the vessel region
     X_grid, Z_grid = np.meshgrid(x, z)
@@ -917,7 +916,7 @@ ax1.plot(
     label="Measured PD signal",
 )
 ax1.set_xlabel("Density (times baseline)", fontsize=12)
-ax1.set_ylabel("Power Doppler Signal (std of envelope)", fontsize=12)
+ax1.set_ylabel("Power Doppler Signal (std of complex images)", fontsize=12)
 ax1.set_title(
     "Power Doppler Signal vs. Density\n(Horizontal blood vessel, coherent flow)",
     fontsize=14,
@@ -1037,9 +1036,8 @@ for angle_idx, flow_angle in enumerate(flow_angles_deg):
         )
         imgs_complex_test.append(img_complex_test)
 
-    # Compute envelope and variance
-    imgs_env_test = np.array([np.abs(img) for img in imgs_complex_test])
-    img_std_test = imgs_env_test.std(axis=0)
+    imgs_complex_test = np.array(imgs_complex_test)
+    img_std_test = imgs_complex_test.std(axis=0)
 
     # Create rotated rectangular mask for pixels
     X_grid, Z_grid = np.meshgrid(x, z)
@@ -1080,7 +1078,7 @@ ax1.plot(
     color="#3498db",
 )
 ax1.set_xlabel("Flow Angle (degrees)", fontsize=12)
-ax1.set_ylabel("Power Doppler Signal (std of envelope)", fontsize=12)
+ax1.set_ylabel("Power Doppler Signal (std of complex images)", fontsize=12)
 ax1.set_title(
     f"Power Doppler Signal vs. Flow Angle\n(Flow speed: {flow_speed*1e3:.1f} mm/s)",
     fontsize=14,
@@ -1201,14 +1199,13 @@ for Y in tqdm(Ys):
         Y, times, elem_pos, x, z, P.c, betas, 2 * np.pi * P.f_carrier, alpha
     )
     imgs_complex.append(img_complex)
+imgs_complex = np.array(imgs_complex)
 
 print(f"✓ Collected {len(Ys)} frames")
 print(f"  Each frame shape: {Ys[0].shape}")
 
 # %%
-# Second-order: standard deviation
-imgs_env = np.array([np.real(img) for img in imgs_complex])
-img_std = imgs_env.std(axis=0)
+img_std = imgs_complex.std(axis=0)
 
 plt.figure(figsize=(8, 6))
 plt.imshow(
@@ -1219,7 +1216,7 @@ plt.imshow(
 )
 plt.xlabel("x (mm)")
 plt.ylabel("z (mm)")
-plt.title("Second-order image (std of real image) - Power Doppler")
+plt.title("Second-order image (std of complex images) - Power Doppler")
 plt.colorbar(label="Std Intensity")
 
 plt.tight_layout()
@@ -1229,8 +1226,9 @@ plt.show()
 # Now the whole volume has visible movement, and the artery is much less visible. Clutter from tissue movement tends to be low-rank and high power: highly spatially coherent. Meanwhile, movement from the blood tends to be incoherent. Thus, it's standard to isolate clutter vs. blood using the SVD, so-called **Spatiotemporal Clutter Filtering**. Let's visualize the singular vectors of the volume:
 
 # %%
-imgs_env = np.array([np.real(img) for img in imgs_complex])
-U, S, Vh = np.linalg.svd(imgs_env.reshape(len(imgs_env), -1), full_matrices=False)
+U, S, Vh = np.linalg.svd(
+    imgs_complex.reshape(len(imgs_complex), -1), full_matrices=False
+)
 
 # %%
 plt.plot(S / S.sum(), "o-")
@@ -1243,7 +1241,7 @@ plt.yscale("log")
 for i in range(6):
     plt.subplot(2, 3, i + 1)
     plt.imshow(
-        Vh[i, :].reshape(imgs_env.shape[1:]),
+        abs(Vh[i, :].reshape(imgs_complex.shape[1:])),
         cmap="gray",
         extent=[x[0] * 1e3, x[-1] * 1e3, z[-1] * 1e3, z[0] * 1e3],
     )
@@ -1255,8 +1253,8 @@ plt.tight_layout()
 
 # %%
 S[:2] = 0
-imgs_env_denoised = (U @ np.diag(S) @ Vh).reshape(imgs_env.shape)
-img_std = imgs_env_denoised.std(axis=0)
+imgs_complex_denoised = (U @ np.diag(S) @ Vh).reshape(imgs_complex.shape)
+img_std = imgs_complex_denoised.std(axis=0)
 
 plt.figure(figsize=(8, 6))
 plt.imshow(
@@ -1267,7 +1265,7 @@ plt.imshow(
 )
 plt.xlabel("x (mm)")
 plt.ylabel("z (mm)")
-plt.title("Second-order image (std of real image) - Power Doppler")
+plt.title("Second-order image (std of complex images) - Power Doppler")
 plt.colorbar(label="Std Intensity")
 
 plt.tight_layout()
@@ -1415,7 +1413,7 @@ center_pos = imgs_env_test[:, middle_line, :]
 # %%
 # Visualize the signal over time
 plt.imshow(
-    center_pos.T,
+    abs(center_pos).T,
     aspect="auto",
     cmap="hot",
     extent=[0, n_frames_test / fps * 1000, x[0] * 1e3, x[-1] * 1e3],
