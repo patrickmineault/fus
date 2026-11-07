@@ -1,11 +1,12 @@
 # Functional ultrasound from scratch
 
-A collection of notebooks demonstrating how functional ultrasound imaging (fUSI) works from scratch. These four notebooks are implemented:
+A collection of notebooks demonstrating how functional ultrasound imaging (fUSI) works from scratch. These five notebooks are implemented:
 
 1. Ultrasound propagation in homogeneous media: the wave equation, plane waves, focusing, apodization, steering
 2. Structural ultrasound reconstruction: how scatterers create an image, the delay-and-sum algorithm
 3. Functional ultrasound: measuring the movement of scatterers. Power Doppler, correlation functions, global motion and clutter removal with the SVD.
 4. Analyzing real fUS data. Movement artifacts, hemodynamic response functions, General Linear Models
+5. Decoding saccades from monkey LIP. Direction tuning maps, single-trial decoding with PCA + LDA, and whether fMRI-like resolution or sensitivity limits decoding
 
 ## Why this series of notebooks?
 
@@ -15,7 +16,7 @@ I wanted to create Python notebooks where you could transparently see how what t
 
 ## Requirements
 
-To maximize legibility, we do as much as possible in base Python, numpy, scipy and matplotlib. The 3rd tutorial uses Numba for acceleration. The 4th tutorial requires the installation of the [CaImAn package](https://github.com/flatironinstitute/CaImAn).
+To maximize legibility, we do as much as possible in base Python, numpy, scipy and matplotlib. The 3rd tutorial uses Numba for acceleration. The 4th tutorial requires the installation of the [CaImAn package](https://github.com/flatironinstitute/CaImAn). The 5th tutorial uses `curl` to download a single session (~300 MB) of the [Griggs et al. (2025) dataset](https://data.caltech.edu/records/p5jan-02r60).
 
 To set up the environment to run all tutorials, in a clean environment:
 
@@ -29,7 +30,6 @@ pip install -r requirements.txt
 Note: if interested in working on these, do send an email or a PR, much appreciated.
 
 - Add another tutorial on how you would do this in the "real world", covering GPU-accelerated frameworks at a more "industrial" scale. Potential frameworks include  NDK, k-wave in python, vbeam, FAST and pyfus.
-- Do a re-analysis of [Functional ultrasound neuroimaging reveals mesoscopic organization of saccades in the lateral intraparietal area](https://data.caltech.edu/records/p5jan-02r60). Should cover questions like how decoding varies as resolution decreases, telegraphing the relationship between fUS and fMRI.
 
 ## Related work/inspiration
 
